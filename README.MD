@@ -39,3 +39,6 @@ For each vulnerable area, implement:
 
 ## Deliverables
 - This repo, logs/screenshots, a written report containing threat models and mitigation steps.
+
+## Security Vulnerabilities Documenation/Report
+A PDF report with proper screenshots of vulnerablity has also been created and uploaded into this repo. Feel free to refer it for and guidance or explanation of any of these listed 7 security vulnerabilities.
