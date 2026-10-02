@@ -42,3 +42,8 @@ For each vulnerable area, implement:
 
 ## Security Vulnerabilities Documenation/Report
 A PDF report with proper screenshots of vulnerablity has also been created and uploaded into this repo. Feel free to refer it for and guidance or explanation of any of these listed 7 security vulnerabilities.
+
+## ⚠️ SECURITY NOTICE
+This branch intentionally contains vulnerable code for
+educational security testing and demonstration purposes.
+Do not deploy this branch to a production environment.
