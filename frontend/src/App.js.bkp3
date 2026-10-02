@@ -1,0 +1,123 @@
+// frontend/src/App.js
+import React, { useState, useEffect } from 'react';
+import io from 'socket.io-client';
+import axios from 'axios';
+
+const BACKEND = 'http://localhost:4000';
+
+function App() {
+  const [token, setToken] = useState('');
+  const [username, setUsername] = useState('');
+  const [room, setRoom] = useState('general');
+  const [messages, setMessages] = useState([]);
+  const [text, setText] = useState('');
+  const [labMode] = useState(true);
+
+  const [socket, setSocket] = useState(null);
+
+  useEffect(() => {
+    if (!token) return; // nothing to do without token
+
+    // create socket when token becomes available
+    const s = io(BACKEND, { auth: { token } });
+
+    // handler functions defined outside so we can remove them on cleanup
+    const onConnect = () => {
+      console.log('ws connected', s.id);
+      // join after connect using CURRENT username & room values
+      s.emit('join', { username, room });
+    };
+
+    const onMessage = (m) => {
+      // Use functional update to avoid stale state
+      setMessages(prev => [...prev, m]);
+    };
+
+    s.on('connect', onConnect);
+    s.on('message', onMessage);
+
+    setSocket(s);
+
+    // cleanup when token changes or component unmounts
+    return () => {
+      s.off('connect', onConnect);
+      s.off('message', onMessage);
+      // optionally notify server or just disconnect
+      if (s && s.connected) s.disconnect();
+      setSocket(null);
+    };
+    // include username and room so that connect emits the latest values when socket is created
+  }, [token, username, room]);
+
+  // login: get token (backend returns token). username state is already set by input.
+  async function login() {
+    try {
+      const response = await axios.post(BACKEND + '/api/login', { username });
+      if (response && response.data && response.data.token) {
+        setToken(response.data.token);
+        // don't attempt socket.emit here — useEffect will create the socket and join on connect
+      } else {
+        alert('Login failed: no token returned');
+      }
+    } catch (e) {
+      console.error('login error', e);
+      alert('Login failed');
+    }
+  }
+
+  async function sendMessage() {
+    // If socket not ready, fallback to HTTP
+    if (!socket || !socket.connected) {
+      try {
+        await axios.post(BACKEND + '/api/messages/send', { room, text, username });
+        setText('');
+      } catch (e) {
+        console.error('HTTP send error', e);
+      }
+      return;
+    }
+    socket.emit('send', { room, text });
+    setText('');
+  }
+
+  async function searchUsers(q) {
+    const resp = await axios.get(BACKEND + '/api/users/search?q=' + encodeURIComponent(q));
+    alert('Found: ' + resp.data.count);
+  }
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h2>ChatLab (LAB MODE: {labMode ? 'ON' : 'OFF'})</h2>
+
+      <div>
+        <input placeholder="username" value={username} onChange={e => setUsername(e.target.value)} />
+        <button onClick={login}>Login (get token)</button>
+      </div>
+
+      <div style={{ marginTop: 10 }}>
+        <input placeholder="room" value={room} onChange={e => setRoom(e.target.value)} />
+      </div>
+
+      <div style={{ marginTop: 10 }}>
+        <textarea value={text} onChange={e => setText(e.target.value)} />
+        <button onClick={sendMessage}>Send</button>
+      </div>
+
+      <div style={{ marginTop: 20, border: '1px solid #ddd', padding: 10, maxHeight: 300, overflow: 'auto' }}>
+        <h4>Messages</h4>
+        {messages.map((m, i) => (
+          <div key={i} style={{ marginBottom: 8 }}>
+            <b>{m.username}</b>:&nbsp;
+            {labMode ? <span dangerouslySetInnerHTML={{ __html: m.text }} /> : <span>{m.text}</span>}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 10 }}>
+        <input placeholder="search users" onBlur={e => searchUsers(e.target.value)} />
+      </div>
+    </div>
+  );
+}
+
+export default App;

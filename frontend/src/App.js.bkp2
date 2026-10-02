@@ -1,0 +1,96 @@
+import React, { useState, useEffect } from 'react';
+import io from 'socket.io-client';
+import axios from 'axios';
+
+const BACKEND = 'http://localhost:4000';
+
+function App() {
+  const [token, setToken] = useState('');
+  const [username, setUsername] = useState('');
+  const [room, setRoom] = useState('general');
+  const [messages, setMessages] = useState([]);
+  const [text, setText] = useState('');
+  const [labMode] = useState(true); // show frontend is aware of lab
+
+  const [socket, setSocket] = useState(null);
+
+  useEffect(() => {
+    // If token exists, connect via Socket.io
+    if (token && !socket) {
+      const s = io(BACKEND, { auth: { token } });
+     // s.on('connect', () => console.log('ws connected', s.id));
+   s.on("connect", () => {
+      console.log("ws connected", s.id);
+
+      // 🚀 join the room right after socket connects
+      s.emit("join", { username, room });
+    });
+      s.on('message', (m) => {
+	console.log("Message sent:",m);
+	console.log("Message Array", messages);
+        setMessages(prev => [...prev, m]);
+      });
+      setSocket(s);
+    }
+  }, [token]);
+
+  async function login() {
+    const response = await axios.post(BACKEND + '/api/login', { username });
+    setToken(response.data.token);
+  }
+
+  async function sendMessage() {
+	console.log(!socket);
+    if (!socket) {
+      // fallback to HTTP send
+      await axios.post(BACKEND + '/api/messages/send', { room, text, username });
+      setText('');
+      return;
+    }
+    socket.emit('send', { room, text });
+    setText('');
+  }
+
+  async function searchUsers(q) {
+    const resp = await axios.get(BACKEND + '/api/users/search?q=' + encodeURIComponent(q));
+    alert('Found: ' + resp.data.count);
+  }
+
+  // DANGEROUS RENDER: in lab mode we intentionally use dangerouslySetInnerHTML
+  // This demonstrates DOM-based / Stored XSS when messages contain markup.
+  return (
+    <div style={{ padding: 20 }}>
+      <h2>ChatLab (LAB MODE: {labMode ? 'ON' : 'OFF'})</h2>
+      <div>
+        <input placeholder="username" value={username} onChange={e=>setUsername(e.target.value)} />
+        <button onClick={login}>Login (get token)</button>
+      </div>
+
+      <div style={{ marginTop: 10 }}>
+        <input placeholder="room" value={room} onChange={e=>setRoom(e.target.value)} />
+      </div>
+
+      <div style={{ marginTop: 10 }}>
+        <textarea value={text} onChange={e=>setText(e.target.value)} />
+        <button onClick={sendMessage}>Send</button>
+      </div>
+
+      <div style={{ marginTop: 20, border: '1px solid #ddd', padding: 10, maxHeight: 300, overflow: 'auto' }}>
+        <h4>Messages</h4>
+        {messages.map((m, i) => (
+          <div key={i} style={{ marginBottom: 8 }}>
+            <b>{m.username}</b>:&nbsp;
+            {/* In lab mode we render raw HTML to demonstrate stored/DOM XSS */}
+            {labMode ? <span dangerouslySetInnerHTML={{ __html: m.text }} /> : <span>{m.text}</span>}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 10 }}>
+        <input placeholder="search users" onBlur={e=>searchUsers(e.target.value)} />
+      </div>
+    </div>
+  );
+}
+
+export default App;

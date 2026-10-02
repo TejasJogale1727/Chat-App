@@ -1,0 +1,112 @@
+import React, { useState, useEffect } from "react";
+import io from "socket.io-client";
+import axios from "axios";
+import "./App.css";
+
+const BACKEND = "http://localhost:4000";
+
+function App() {
+  const [token, setToken] = useState("");
+  const [username, setUsername] = useState("");
+  const [room, setRoom] = useState("general");
+  const [messages, setMessages] = useState([]);
+  const [text, setText] = useState("");
+  const [socket, setSocket] = useState(null);
+
+  // connect socket after login
+  useEffect(() => {
+    if (token && !socket) {
+      const s = io(BACKEND, { auth: { token } });
+      s.on("connect", () => {
+        console.log("ws connected", s.id);
+        // join room immediately
+        s.emit("join", { username, room });
+      });
+      s.on("message", (m) => setMessages((prev) => [...prev, m]));
+      setSocket(s);
+    }
+  }, [token]);
+
+  async function login(e) {
+    e.preventDefault();
+    const response = await axios.post(BACKEND + "/api/login", { username });
+    if (response.status === 200) {
+      setToken(response.data.token);
+    }
+  }
+
+  function sendMessage(e) {
+    e.preventDefault();
+    if (text && socket) {
+      socket.emit("send", { room, text });
+      setText("");
+    }
+  }
+
+  if (!token) {
+    // ---------- LOGIN PAGE ----------
+    return (
+      <div className="app-container">
+        <div className="login-box">
+          <h2>🔐 Vulnerable Chat</h2>
+          <form onSubmit={login}>
+            <input
+              type="text"
+              placeholder="Enter username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+            />
+            <input
+              type="text"
+              placeholder="Enter room name"
+              value={room}
+              onChange={(e) => setRoom(e.target.value)}
+              required
+            />
+            <button type="submit">Join Chat</button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------- CHAT PAGE ----------
+  return (
+    <div className="app-container">
+      <div className="chat-box">
+        <header>
+          <h2>💬 Chat Room: {room}</h2>
+        </header>
+        <div className="messages">
+          {messages.map((msg, i) => (
+            <div
+              key={i}
+              className={`message ${
+                msg.user === "system"
+                  ? "system"
+                  : msg.username === username
+                  ? "self"
+                  : ""
+              }`}
+            >
+              <strong>{msg.username || msg.user}: </strong>
+              <span>{msg.text}</span>
+            </div>
+          ))}
+        </div>
+        <form className="input-box" onSubmit={sendMessage}>
+          <input
+            type="text"
+            placeholder="Type a message..."
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+          <button type="submit">Send</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export default App;
